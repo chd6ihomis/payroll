@@ -78,13 +78,34 @@ class EmployeeController extends Controller
             'end_date' => 'required',
         ]);
 
+        $office = DB::table('office')->where('office_name', $data['office'])->first()->id;
+        $start_date = Carbon::parse($data['start_date'])->format('Y-m-d');
+        $end_date = Carbon::parse($data['end_date'])->format('Y-m-d');
+
+        // Reject exact re-adds. Matching on employee_id alone would block legitimate
+        // rehires and contract renewals, so the whole contract must match.
+        $duplicate = Employee::where('employee_id', $data['employee_id'])
+            ->where('employee_name', $data['employee_name'])
+            ->where('office', $office)
+            ->where('start_date', $start_date)
+            ->where('end_date', $end_date)
+            ->first();
+
+        if ($duplicate) {
+            return redirect()->back()->withInput()->with([
+                'message' => 'This employee already exists for the same office and period (record #' . $duplicate->id . ')!',
+                'alert-type' => 'error'
+            ]);
+        }
+
         $employee = new Employee([
             'employee_id' => $data['employee_id'],
             'employee_name' => $data['employee_name'],
+            'status' => 'true',
             'birth_date' => Carbon::parse($data['birthdate'])->format('Y-m-d'),
             'contact_num' => $data['contact_num'],
             'position' => $data['position'],
-            'office' => DB::table('office')->where('office_name', $data['office'])->first()->id,
+            'office' => $office,
             'monthly_rate' => $data['monthly_rate'],
             'fs' => $data['fund_source'],
             'lbp_num' => $data['lbp_num'],
@@ -92,8 +113,8 @@ class EmployeeController extends Controller
             'pagibig_num' => $data['pagibig_num'],
             'sss_num' => $data['sss_num'],
             'philhealth_num' => $data['philhealth_num'],
-            'start_date' => Carbon::parse($data['start_date'])->format('Y-m-d'),
-            'end_date' => Carbon::parse($data['end_date'])->format('Y-m-d'),
+            'start_date' => $start_date,
+            'end_date' => $end_date,
         ]);
 
         $employee->save();
