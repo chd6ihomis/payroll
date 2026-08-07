@@ -469,7 +469,7 @@
 
                     <div class="form-group">
                         <label for="employeeInput">Employee</label>
-                        <input type="text" class="form-control-plaintext col" name="employee" id="employee" value="" readonly>
+                        <input type="text" class="form-control-plaintext col" id="employee" value="" readonly>
                     </div>
                     <div class="form-group">
                         <label for="working_days">No. of Working Days</label>

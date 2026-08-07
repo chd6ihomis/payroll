@@ -353,11 +353,19 @@ class SalaryController extends Controller
      */
     public function update(Request $request)
     {
+        $salary = Salary::find($request->salary_id);
+
+        if (!$salary) {
+            return redirect()->back()->with([
+                'message' => 'Salary record not found!',
+                'alert-type' => 'error'
+            ]);
+        }
+
         // Check if salary already corrected
-        $check_status = Salary::where('id', $request->salary_id)->first()->isCorrect;
+        $check_status = $salary->isCorrect;
 
         $data = request()->validate([
-            'employee' => 'required',
             'working_days' => 'required',
             'day' => 'required',
             'hr' => 'required',
@@ -376,7 +384,17 @@ class SalaryController extends Controller
 
         if ($check_status == 'D' || $check_status == 'N') {
 
-            $employee = Employee::where('employee_name', $data['employee'])->first();
+            // Resolve the employee from the salary row itself. Matching on name alone
+            // returned the wrong record whenever two employees shared a name.
+            $employee = $salary->employee;
+
+            if (!$employee) {
+                return redirect()->back()->with([
+                    'message' => 'Employee record for this salary no longer exists!',
+                    'alert-type' => 'error'
+                ]);
+            }
+
             $payroll = Payroll::find($data['payroll_id']);
             $initial_month_end = Carbon::parse($payroll->period_end)->endOfMonth()->format('Y-m-d');
             $calendarDays = intval(Carbon::parse($payroll->period_start)->endOfMonth()->format('d'));
@@ -485,12 +503,13 @@ class SalaryController extends Controller
 
             $remittance = round($data['pagibig'] + $data['sss'] + $philhealth + $data['coop'] + $data['coop_loan'], 2);
             $net_amount = $soa - $remittance - $data['tax'] + $data['comm_allowance'];
-            $payroll_type = Payroll::find($data['payroll_id'])->first()->type;
 
-            Salary::find($data['salary_id'])->update([
+            $salary->update([
                 'payroll_id' => $data['payroll_id'],
                 'payroll_type' => $payroll->type,
                 'working_days' => $data['working_days'],
+                'monthly_rate' => $employee->monthly_rate,
+                'basic' => $basic,
                 'day' => $data['day'],
                 'hr' => $data['hr'],
                 'min' => $data['min'],
