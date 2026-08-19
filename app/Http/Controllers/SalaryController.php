@@ -15,6 +15,18 @@ use NumberFormatter;
 
 class SalaryController extends Controller
 {
+    /** Monthly rate at or above which the PhilHealth premium is capped. */
+    private const PHILHEALTH_SALARY_CEILING = 100000;
+
+    /** Capped premium for a full-month computation. */
+    private const PHILHEALTH_CAP_MONTHLY = 5000;
+
+    /** Capped premium for a single cutoff. */
+    private const PHILHEALTH_CAP_CUTOFF = 2500;
+
+    /** salaryComputation code that covers a whole month. */
+    private const SALARY_COMPUTATION_FULL_MONTH = '2';
+
     /**
      * Display a listing of the resource.
      *
@@ -233,7 +245,7 @@ class SalaryController extends Controller
         $soa = $basic - $deductions;
 
 
-        $philhealth = (($soa / 1.20) * 0.05) - $data['philhealth_otc'];
+        $philhealth = $this->computePhilhealth($soa, $employee->monthly_rate, $data['salaryComputation'], $data['philhealth_otc']);
         /** 5% for philhealth contribution excluding the premium 1.20
         $calculatePhilhealth = (($soa / 1.20) * 0.05) - $data['philhealth_otc']; //5% for philhealth contribution excluding the premium 1.20 */
 
@@ -487,7 +499,7 @@ class SalaryController extends Controller
 
             $soa = $basic - $deductions;
 
-            $philhealth = (($soa / 1.20) * 0.05) - $data['philhealth_otc'];
+            $philhealth = $this->computePhilhealth($soa, $employee->monthly_rate, $data['calculation'], $data['philhealth_otc']);
 
             /**
             $calculatePhilhealth = (($soa / 1.20) * 0.05) - $data['philhealth_otc']; //5% for philhealth contribution excluding the premium 1.20
@@ -611,5 +623,32 @@ class SalaryController extends Controller
         $periods = Salary::where('office', $office)->select('payroll_date')->distinct()->orderBy('payroll_date', 'DESC')->get();
 
         return view('reports.utilization', compact('periods', 'notifications'));
+    }
+
+    /**
+     * PhilHealth deduction for one salary row.
+     *
+     * Employees earning below the salary ceiling keep the standard share:
+     * 5% of the SOA excluding the 1.20 premium. At or above the ceiling the
+     * premium is a flat amount per period, not prorated by days worked, so
+     * absences and partial periods do not reduce it.
+     *
+     * @param  float   $soa               SOA for the period.
+     * @param  float   $monthlyRate       Employee monthly rate.
+     * @param  string  $salaryComputation salaryComputation / calculation code.
+     * @param  float   $philhealthOtc     Amount already paid over the counter.
+     * @return float
+     */
+    private function computePhilhealth($soa, $monthlyRate, $salaryComputation, $philhealthOtc)
+    {
+        if ($monthlyRate >= self::PHILHEALTH_SALARY_CEILING) {
+            $share = (string) $salaryComputation === self::SALARY_COMPUTATION_FULL_MONTH
+                ? self::PHILHEALTH_CAP_MONTHLY
+                : self::PHILHEALTH_CAP_CUTOFF;
+        } else {
+            $share = ($soa / 1.20) * 0.05; //5% for philhealth contribution excluding the premium 1.20
+        }
+
+        return $share - $philhealthOtc;
     }
 }
